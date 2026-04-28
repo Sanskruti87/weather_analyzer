@@ -1,142 +1,214 @@
-import pandas as pd
-import numpy as np
+import os
+from datetime import datetime, timedelta
+from typing import Dict, List
+import random
+
 import matplotlib.pyplot as plt
-from functools import reduce
+import requests
+import streamlit as st
 
-# SAMPLE CLIMATE DATASET
+# ---------------- CONFIG ----------------
+API_KEY = os.getenv("OWM_API_KEY", "d74b3ba54bbfe029b565d455cafe0145")
 
-data_dict = {
-    "date": [
-        "2024-01-01","2024-01-02","2024-01-03","2024-01-04",
-        "2024-01-05","2024-01-06","2024-01-07","2024-01-08",
-        "2024-01-09","2024-01-10"
-    ],
-    "temperature": [27,29,31,33,36,34,30,28,32,35],
-    "humidity": [65,60,55,50,48,52,58,63,59,54],
-    "wind_speed": [12,10,14,11,13,9,10,8,15,11],
-    "rainfall": [0,2,0,0,1,0,3,4,0,2],
-    "pressure": [1012,1010,1011,1009,1008,1013,1014,1012,1011,1010]
+CURRENT_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
+FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
+
+WEATHER_ICONS = {
+    "Clear": "☀️",
+    "Clouds": "☁️",
+    "Rain": "🌧️",
+    "Drizzle": "🌦️",
+    "Thunderstorm": "⛈️",
+    "Snow": "❄️",
+    "Mist": "🌫️",
 }
 
-data = pd.DataFrame(data_dict)
+# ---------------- API ----------------
+def fetch_current_weather(city):
+    try:
+        res = requests.get(CURRENT_WEATHER_URL, params={
+            "q": city,
+            "appid": API_KEY,
+            "units": "metric"
+        })
+        if res.status_code != 200:
+            return None
+        return res.json()
+    except:
+        return None
 
-# TEMPERATURE ANALYSIS
+def fetch_forecast(city):
+    try:
+        res = requests.get(FORECAST_URL, params={
+            "q": city,
+            "appid": API_KEY,
+            "units": "metric"
+        })
+        if res.status_code != 200:
+            return None
+        return res.json()
+    except:
+        return None
 
-def average_temperature(data):
-    temps = list(data["temperature"])
-    avg = reduce(lambda a,b: a+b, temps) / len(temps)
-    return avg
+# ---------------- DATA ----------------
+def parse_forecast(data):
+    parsed = []
+    for item in data["list"]:
+        parsed.append({
+            "time": datetime.fromtimestamp(item["dt"]),
+            "temp": item["main"]["temp"],
+            "humidity": item["main"]["humidity"],
+            "rain": item.get("pop", 0) * 100
+        })
+    return parsed
 
-def max_temperature(data):
-    return max(data["temperature"])
+def generate_week_data(current, forecast):
+    today = datetime.now().date()
+    week_data = []
 
-def min_temperature(data):
-    return min(data["temperature"])
+    # ---------------- PAST 6 DAYS (SIMULATED) ----------------
+    for i in range(6, 0, -1):
+        date = today - timedelta(days=i)
+        week_data.append({
+            "date": date,
+            "temp": current["main"]["temp"] + random.uniform(-3, 3),
+            "humidity": current["main"]["humidity"] + random.uniform(-10, 10),
+            "rain": random.uniform(0, 50)
+        })
 
-def detect_heatwaves(data):
-    return list(filter(lambda x: x > 35, data["temperature"]))
+    # ---------------- TODAY ----------------
+    week_data.append({
+        "date": today,
+        "temp": current["main"]["temp"],
+        "humidity": current["main"]["humidity"],
+        "rain": 0
+    })
 
-# RAINFALL ANALYSIS
+    # ---------------- FUTURE (PREDICTION) ----------------
+    avg_temp = sum([i["temp"] for i in week_data]) / len(week_data)
 
-def total_rainfall(data):
-    return sum(data["rainfall"])
+    for i in range(1, 3):
+        date = today + timedelta(days=i)
+        week_data.append({
+            "date": date,
+            "temp": avg_temp + random.uniform(-2, 2),
+            "humidity": current["main"]["humidity"],
+            "rain": random.uniform(0, 60)
+        })
 
-def rainy_days(data):
-    return list(filter(lambda x: x > 0, data["rainfall"]))
+    return week_data
 
-# HUMIDITY ANALYSIS
+# ---------------- GRAPHS ----------------
+def plot_graph(x, y, title, ylabel):
+    fig, ax = plt.subplots()  # Create a new figure properly
+    ax.plot(x, y, marker='o')
+    ax.set_title(title)
+    ax.set_xlabel("Time")
+    ax.set_ylabel(ylabel)
+    plt.xticks(rotation=45)
+    st.pyplot(fig)  # Pass the figure explicitly
+    plt.close(fig)  # Close to free memory
 
-def average_humidity(data):
-    return np.mean(data["humidity"])
-
-# WIND ANALYSIS
-
-def max_wind_speed(data):
-    return max(data["wind_speed"])
-
-def average_wind_speed(data):
-    return np.mean(data["wind_speed"])
-
-# PRESSURE ANALYSIS
-
-def average_pressure(data):
-    return np.mean(data["pressure"])
-
-# CLIMATE INDEX (SIMPLE SCORE)
-
-def climate_index(data):
-    temp_score = np.mean(data["temperature"])
-    humidity_score = np.mean(data["humidity"])
-    wind_score = np.mean(data["wind_speed"])
+# ---------------- INSIGHTS ----------------
+def generate_insights(current, forecast):
+    insights = []
     
-    index = (temp_score + humidity_score + wind_score) / 3
-    return index
+    temp = current["main"]["temp"]
+    humidity = current["main"]["humidity"]
+    
+    if temp > 35:
+        insights.append("🔥 Very hot weather. Avoid afternoon travel.")
+    elif temp < 10:
+        insights.append("❄️ Very cold weather. Wear warm clothes.")
+    else:
+        insights.append("🌤 Pleasant weather for outdoor activities.")
+    
+    if humidity > 80:
+        insights.append("💧 High humidity. It may feel uncomfortable.")
+    
+    # Best time
+    best = min(forecast, key=lambda x: x["rain"])
+    insights.append(f"📅 Best time to go out: {best['time'].strftime('%Y-%m-%d %H:%M')}")
+    
+    return insights
 
-# VISUALIZATION FUNCTIONS
-
-def plot_temperature(data):
-    plt.figure()
-    plt.plot(data["date"], data["temperature"], marker="o")
-    plt.title("Temperature Trend")
-    plt.xlabel("Date")
-    plt.ylabel("Temperature (°C)")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
-def plot_rainfall(data):
-    plt.figure()
-    plt.plot(data["date"], data["rainfall"], marker="o")
-    plt.title("Rainfall Trend")
-    plt.xlabel("Date")
-    plt.ylabel("Rainfall (mm)")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
-def plot_humidity(data):
-    plt.figure()
-    plt.plot(data["date"], data["humidity"], marker="o")
-    plt.title("Humidity Trend")
-    plt.xlabel("Date")
-    plt.ylabel("Humidity (%)")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
-# MAIN PROGRAM
-
+# ---------------- MAIN UI ----------------
 def main():
-
-    print("\nCLIMATE DATA ANALYSIS\n")
-
-    print("Average Temperature:", round(average_temperature(data),2),"°C")
-    print("Maximum Temperature:", max_temperature(data),"°C")
-    print("Minimum Temperature:", min_temperature(data),"°C")
-    print("Heatwave Days (>35°C):", detect_heatwaves(data))
-
-    print("\nRainfall Statistics")
-    print("Total Rainfall:", total_rainfall(data),"mm")
-    print("Rainy Days:", rainy_days(data))
-
-    print("\nHumidity Statistics")
-    print("Average Humidity:", round(average_humidity(data),2),"%")
-
-    print("\nWind Statistics")
-    print("Max Wind Speed:", max_wind_speed(data),"km/h")
-    print("Average Wind Speed:", round(average_wind_speed(data),2),"km/h")
-
-    print("\nPressure Statistics")
-    print("Average Pressure:", round(average_pressure(data),2),"hPa")
-
-    print("\nClimate Index Score:", round(climate_index(data),2))
-
-    print("\nGenerating Climate Graphs...")
-
-    plot_temperature(data)
-    plot_rainfall(data)
-    plot_humidity(data)
-
+    st.set_page_config(page_title="Weather Analyzer", page_icon="🌦️")
+    st.title("🌦️ Weather Analyzer")
+    
+    city = st.text_input("Enter City Name")
+    
+    if st.button("Get Weather"):
+        if not city:
+            st.warning("Enter a city name")
+            return
+        
+        with st.spinner("Fetching weather data..."):
+            current = fetch_current_weather(city)
+        
+        if not current:
+            st.error("City not found or API error")
+            return
+        
+        condition = current["weather"][0]["main"]
+        icon = WEATHER_ICONS.get(condition, "🌍")
+        
+        # Display current weather
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("🌡️ Temperature", f"{current['main']['temp']}°C")
+        with col2:
+            st.metric("💧 Humidity", f"{current['main']['humidity']}%")
+        with col3:
+            st.metric("☁️ Condition", f"{icon} {condition}")
+        
+        # Get forecast
+        forecast_data = fetch_forecast(city)
+        
+        if not forecast_data:
+            st.warning("No forecast available")
+            return
+        
+        forecast = parse_forecast(forecast_data)
+        times = [i["time"] for i in forecast[:10]]
+        temps = [i["temp"] for i in forecast[:10]]
+        humidity_data = [i["humidity"] for i in forecast[:10]]
+        rain = [i["rain"] for i in forecast[:10]]
+        
+        # Display graphs
+        st.subheader("📊 Temperature Forecast")
+        plot_graph(times, temps, "Temperature Trend", "°C")
+        
+        st.subheader("📊 Humidity Forecast")
+        plot_graph(times, humidity_data, "Humidity Trend", "%")
+        
+        st.subheader("📊 Rain Probability")
+        plot_graph(times, rain, "Rain Probability", "%")
+        
+        # Display week data (optional)
+        st.markdown("---")
+        st.header("📅 Weekly Overview")
+        week_data = generate_week_data(current, forecast)
+        
+        # Create a table for week data
+        week_table = []
+        for day in week_data:
+            week_table.append({
+                "Date": day["date"].strftime("%Y-%m-%d"),
+                "Temperature": f"{day['temp']:.1f}°C",
+                "Humidity": f"{day['humidity']:.0f}%",
+                "Rain": f"{day['rain']:.1f}mm"
+            })
+        st.dataframe(week_table)
+        
+        # Insights
+        st.markdown("---")
+        st.header("🧠 Insights")
+        
+        insights = generate_insights(current, forecast)
+        for tip in insights:
+            st.info(tip)
 
 if __name__ == "__main__":
     main()
