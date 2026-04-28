@@ -1,19 +1,28 @@
 # Weather Analyzer Project
+A simple and interactive **Weather Analyzer Web App** built using **Streamlit** that provides real-time weather data, forecasts, visual graphs, and smart insights.
 
-A simple Python-based climate data analysis tool that uses libraries like Pandas, NumPy, and Matplotlib to analyze and visualize weather data.
-Developed as a learning project to understand data analysis and visualization in Python.
+## 🚀 Features
 
-# Project Overview
+* 🌍 Fetch current weather by city
+* 🌡️ Displays temperature, humidity, and condition
+* 📊 Graphs for:
 
-This project demonstrates how to:
+  * Temperature trends
+  * Humidity levels
+  * Rain probability
+* 📅 Weekly overview (past + predicted data)
+* 🧠 Smart weather insights & recommendations
 
-  Work with structured datasets using Pandas.</br>
-  Perform statistical analysis using NumPy.</br>
-  Apply functional programming concepts like map, filter, and reduce.</br>
-  Visualize climate trends using Matplotlib.</br>
+## 🛠️ Tech Stack
 
-# Concepts Used:
-  DataFrames (Pandas),</br>
-  Statistical functions (NumPy),</br>
-  Functional programming (reduce, filter),</br>
-  Data visualization (Matplotlib).</br>
+* Python
+* Streamlit
+* Matplotlib
+* OpenWeatherMap API
+* Requests
+
+## 📌 Usage
+
+* Enter a city name
+* Click **"Get Weather"**
+* View real-time data, graphs, and insights
